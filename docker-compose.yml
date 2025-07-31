@@ -9,5 +9,6 @@ services:
     env_file:
       - .env
     volumes:
-      - .:/usr/src/app
+      - .:/usr/src/app:cached
+      - /usr/src/app/node_modules
     restart: unless-stopped
