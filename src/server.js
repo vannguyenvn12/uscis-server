@@ -19,7 +19,7 @@ mongoose
   .catch((err) => console.error('❌ MongoDB error:', err));
 
 // Tạo WebSocket server
-const wss = new WebSocket.Server({ port: process.env.WS_PORT }); // Đổi cổng WebSocket nếu cần
+const wss = new WebSocket.Server({ port: process.env.PORT }); // Đổi cổng WebSocket nếu cần
 
 // Biến lưu dữ liệu nhận được từ Apps Script
 let receivedData = '';
@@ -91,7 +91,7 @@ app.post('/send-data', verifyApiKey, async (req, res) => {
 });
 
 // Tạo HTTP server với Express
-app.listen(process.env.PORT || 8081, '0.0.0.0', () => {
+app.listen(process.env.PORT || 8081, () => {
   console.log(`Express server running on http://localhost:${process.env.PORT}`);
 });
 
