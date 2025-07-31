@@ -1,10 +1,13 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const WebSocket = require('ws');
 const mongoose = require('mongoose');
 const verifyApiKey = require('./middlewares/verifyApiKey');
 
 const app = express();
+const server = http.createServer(app);
+
 app.use(express.json()); // Đảm bảo rằng bạn có middleware để xử lý JSON
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,7 +19,7 @@ mongoose
   .catch((err) => console.error('❌ MongoDB error:', err));
 
 // Tạo WebSocket server
-const wss = new WebSocket.Server({ port: 8082 }); // Đổi cổng WebSocket nếu cần
+const wss = new WebSocket.Server({ port: process.env.WS_PORT }); // Đổi cổng WebSocket nếu cần
 
 // Biến lưu dữ liệu nhận được từ Apps Script
 let receivedData = '';
@@ -37,6 +40,12 @@ wss.on('connection', (ws) => {
     ws.send(receivedData);
   }
 
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }, 5 * 60 * 1000); // 5 phút
+
   // Lắng nghe dữ liệu từ client WebSocket
   ws.on('message', (message) => {
     responseData = message.toString();
@@ -45,7 +54,8 @@ wss.on('connection', (ws) => {
   // Xử lý khi client đóng kết nối
   ws.on('close', () => {
     console.log('Client disconnected');
-    clients = clients.filter((client) => client !== ws); // Loại bỏ client khỏi danh sách
+    clients = clients.filter((client) => client !== ws);
+    clearInterval(pingInterval); // Dọn dẹp interval
   });
 });
 
@@ -81,8 +91,8 @@ app.post('/send-data', verifyApiKey, async (req, res) => {
 });
 
 // Tạo HTTP server với Express
-const server = app.listen(8081, () => {
-  console.log('Express server running on http://localhost:8081');
+app.listen(process.env.PORT || 8081, '0.0.0.0', () => {
+  console.log(`Express server running on http://localhost:${process.env.PORT}`);
 });
 
 // Kết nối WebSocket vào server HTTP của Express

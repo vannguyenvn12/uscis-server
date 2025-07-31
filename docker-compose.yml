@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  uscis-server:
+    build: .
+    container_name: uscis-server
+    ports:
+      - '${PORT}:${PORT}'
+    env_file:
+      - .env
+    volumes:
+      - .:/usr/src/app
+    restart: unless-stopped
