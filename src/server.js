@@ -1,12 +1,12 @@
 require('dotenv').config();
+const fs = require('fs');
+const https = require('https');
 const express = require('express');
-const http = require('http');
 const WebSocket = require('ws');
 const mongoose = require('mongoose');
 const verifyApiKey = require('./middlewares/verifyApiKey');
 
 const app = express();
-const server = http.createServer(app);
 app.use(express.json());
 
 // MongoDB
@@ -15,17 +15,19 @@ mongoose
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB error:', err));
 
-// WebSocket Server chỉ nhận /ws
-const wss = new WebSocket.Server({ noServer: true });
-server.on('upgrade', (request, socket, head) => {
-  if (request.url === '/ws' || request.url === '/ws/') {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
-  } else {
-    socket.destroy();
-  }
-});
+// HTTPS options
+const server = https.createServer(
+  {
+    cert: fs.readFileSync(
+      '/etc/letsencrypt/live/vannguyenv12.com/fullchain.pem'
+    ), // hoặc cert.pem nếu self-signed
+    key: fs.readFileSync('/etc/letsencrypt/live/vannguyenv12.com/privkey.pem'), // hoặc key.pem
+  },
+  app
+);
+
+// WebSocket server
+const wss = new WebSocket.Server({ server });
 
 let clients = [];
 let receivedData = '';
@@ -33,10 +35,8 @@ let responseData = '';
 
 wss.on('connection', (ws) => {
   console.log('Client connected');
-
   clients.push(ws);
 
-  // Gửi dữ liệu hiện tại nếu có
   if (receivedData) ws.send(String(receivedData));
 
   const pingInterval = setInterval(() => {
@@ -54,19 +54,17 @@ wss.on('connection', (ws) => {
   });
 });
 
-// API nhận dữ liệu từ Apps Script
+// API từ Apps Script
 app.post('/send-data', verifyApiKey, async (req, res) => {
   try {
     const { receiptNumber } = req.body;
-    if (!receiptNumber)
-      return res.status(400).send('No receipt number provided');
+    if (!receiptNumber) return res.status(400).send('No receipt number');
 
     receivedData = String(receiptNumber);
     clients.forEach((c) => {
       if (c.readyState === WebSocket.OPEN) c.send(receivedData);
     });
 
-    // Chờ phản hồi 1s
     await new Promise((r) => setTimeout(r, 1000));
     res.status(200).send(responseData);
   } catch (err) {
@@ -75,8 +73,8 @@ app.post('/send-data', verifyApiKey, async (req, res) => {
   }
 });
 
-// Start server
-const PORT = process.env.PORT || 8082;
+// Start HTTPS + WSS server
+const PORT = process.env.PORT || 8443;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`HTTP server listening on port ${PORT}`);
+  console.log(`HTTPS + WSS server listening on port ${PORT}`);
 });
