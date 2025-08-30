@@ -92,7 +92,7 @@ app.post('/send-data', verifyApiKey, async (req, res) => {
 });
 
 // Tạo HTTP server với Express
-server.listen(process.env.PORT || 8081, () => {
+server.listen(process.env.PORT || 8081, '0.0.0.0', () => {
   console.log(`Express server running on http://localhost:${process.env.PORT}`);
 });
 
