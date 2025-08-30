@@ -7,107 +7,76 @@ const verifyApiKey = require('./middlewares/verifyApiKey');
 
 const app = express();
 const server = http.createServer(app);
+app.use(express.json());
 
-app.use(express.json()); // Đảm bảo rằng bạn có middleware để xử lý JSON
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
+// MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB error:', err));
 
-// Tạo WebSocket server
-// const wss = new WebSocket.Server({ port: process.env.PORT }); // Đổi cổng WebSocket nếu cần
-const wss = new WebSocket.Server({ server });
+// WebSocket Server chỉ nhận /ws
+const wss = new WebSocket.Server({ noServer: true });
 server.on('upgrade', (request, socket, head) => {
   if (request.url === '/ws' || request.url === '/ws/') {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
     });
   } else {
-    socket.destroy(); // reject các path khác
+    socket.destroy();
   }
 });
 
-// Biến lưu dữ liệu nhận được từ Apps Script
+let clients = [];
 let receivedData = '';
 let responseData = '';
 
-// Lưu tất cả các kết nối WebSocket hiện tại
-let clients = [];
-
-// Khi có kết nối WebSocket
 wss.on('connection', (ws) => {
   console.log('Client connected');
 
-  // Thêm client vào danh sách kết nối
   clients.push(ws);
 
-  // Gửi dữ liệu khi có client kết nối (nếu có dữ liệu mới)
-  if (receivedData) {
-    ws.send(receivedData);
-  }
+  // Gửi dữ liệu hiện tại nếu có
+  if (receivedData) ws.send(String(receivedData));
 
   const pingInterval = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.ping();
-    }
-  }, 5 * 60 * 1000); // 5 phút
+    if (ws.readyState === WebSocket.OPEN) ws.ping();
+  }, 5 * 60 * 1000);
 
-  // Lắng nghe dữ liệu từ client WebSocket
   ws.on('message', (message) => {
     responseData = message.toString();
   });
 
-  // Xử lý khi client đóng kết nối
   ws.on('close', () => {
     console.log('Client disconnected');
-    clients = clients.filter((client) => client !== ws);
-    clearInterval(pingInterval); // Dọn dẹp interval
+    clients = clients.filter((c) => c !== ws);
+    clearInterval(pingInterval);
   });
 });
 
-// API để nhận dữ liệu từ Apps Script
+// API nhận dữ liệu từ Apps Script
 app.post('/send-data', verifyApiKey, async (req, res) => {
   try {
     const { receiptNumber } = req.body;
+    if (!receiptNumber)
+      return res.status(400).send('No receipt number provided');
 
-    if (!receiptNumber) {
-      return res.status(400).send('Bad Request: No receipt number provided');
-    }
-
-    console.log('Received data from Apps Script:', receiptNumber);
-
-    // Lưu dữ liệu vào biến để gửi qua WebSocket
-    receivedData = receiptNumber;
-
-    // Gửi dữ liệu cho tất cả các client đã kết nối
-    clients.forEach((client) => {
-      client.send(receivedData);
+    receivedData = String(receiptNumber);
+    clients.forEach((c) => {
+      if (c.readyState === WebSocket.OPEN) c.send(receivedData);
     });
 
-    // Chờ phản hồi từ WebSocket
-    // viết hàm delay
-    await delay(1000);
-
-    // Gửi phản hồi thành công
+    // Chờ phản hồi 1s
+    await new Promise((r) => setTimeout(r, 1000));
     res.status(200).send(responseData);
-  } catch (error) {
-    console.error('Error processing data:', error);
-    res.status(500).send('Server Error: Unable to process the data');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
   }
 });
 
-// Tạo HTTP server với Express
-server.listen(process.env.PORT || 8081, '0.0.0.0', () => {
-  console.log(`Express server running on http://localhost:${process.env.PORT}`);
+// Start server
+const PORT = process.env.PORT || 8082;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTP server listening on port ${PORT}`);
 });
-
-// Kết nối WebSocket vào server HTTP của Express
-// server.on('upgrade', (request, socket, head) => {
-//   wss.handleUpgrade(request, socket, head, (ws) => {
-//     wss.emit('connection', ws, request);
-//   });
-// });
