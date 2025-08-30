@@ -21,6 +21,15 @@ mongoose
 // Tạo WebSocket server
 // const wss = new WebSocket.Server({ port: process.env.PORT }); // Đổi cổng WebSocket nếu cần
 const wss = new WebSocket.Server({ server });
+server.on('upgrade', (request, socket, head) => {
+  if (request.url === '/ws' || request.url === '/ws/') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy(); // reject các path khác
+  }
+});
 
 // Biến lưu dữ liệu nhận được từ Apps Script
 let receivedData = '';
