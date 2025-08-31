@@ -29,6 +29,10 @@ const server = https.createServer(
 // WebSocket server
 const wss = new WebSocket.Server({ server });
 
+wss.on('error', (err) => {
+  console.error('WebSocket error:', err.message);
+});
+
 let clients = [];
 let receivedData = '';
 let responseData = '';
